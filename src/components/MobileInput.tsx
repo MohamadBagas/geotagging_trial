@@ -176,21 +176,25 @@ export default function MobileInput() {
                 </button>
               </div>
             ) : (
-              <div className="relative border-2 border-slate-200 rounded-lg p-2 bg-slate-50">
+              <div className="relative border-2 border-slate-200 rounded-lg p-2 bg-slate-50 flex flex-col gap-2">
                 {media.type === 'video' ? (
                   <video src={media.url} controls className="max-h-48 rounded shadow-sm w-full object-contain" />
                 ) : (
                   <img src={media.url} alt="Preview" className="max-h-48 w-full object-contain rounded shadow-sm" />
                 )}
-                <div className="absolute top-4 right-4 flex gap-2">
-                  <button type="button" onClick={() => cameraInputRef.current?.click()} className="p-2 bg-white/90 backdrop-blur border border-slate-200 rounded shadow-sm hover:bg-indigo-50 text-slate-700 transition-colors"><Camera className="w-4 h-4" /></button>
-                  <button type="button" onClick={() => galleryInputRef.current?.click()} className="p-2 bg-white/90 backdrop-blur border border-slate-200 rounded shadow-sm hover:bg-indigo-50 text-slate-700 transition-colors"><Upload className="w-4 h-4" /></button>
+                <div className="flex gap-2 w-full">
+                  <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 p-2 bg-white border border-slate-200 rounded shadow-sm hover:bg-indigo-50 text-slate-700 font-medium text-xs transition-colors">
+                    <Camera className="w-4 h-4" /> Retake Photo
+                  </button>
+                  <button type="button" onClick={() => galleryInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 p-2 bg-white border border-slate-200 rounded shadow-sm hover:bg-indigo-50 text-slate-700 font-medium text-xs transition-colors">
+                    <Upload className="w-4 h-4" /> Change File
+                  </button>
                 </div>
               </div>
             )}
             <input 
               type="file" 
-              accept="image/*,video/*" 
+              accept="image/*" 
               capture="environment" 
               ref={cameraInputRef} 
               className="hidden" 
