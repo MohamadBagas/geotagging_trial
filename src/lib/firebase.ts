@@ -3,7 +3,7 @@ import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTim
 import { getStorage, ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
 import config from '../../firebase-applet-config.json';
 
-const app = initializeApp(config);
+export const app = initializeApp(config);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 

@@ -1,6 +1,8 @@
-import React, { useRef, useState } from 'react';
-import { Camera, MapPin, Upload, Video } from 'lucide-react';
-import { addGeotag, uploadMedia } from '../lib/firebase';
+import React, { useRef, useState, useEffect } from 'react';
+import { Camera, MapPin, Upload, Video, Save } from 'lucide-react';
+import { addGeotag } from '../lib/firebase';
+import { uploadToDrive } from '../lib/drive';
+import { googleSignIn, initAuth, getAccessToken } from '../lib/auth';
 import { useNavigate } from 'react-router-dom';
 
 export default function MobileInput() {
@@ -10,9 +12,72 @@ export default function MobileInput() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [needsAuth, setNeedsAuth] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  // Load auto-saved data on mount
+  useEffect(() => {
+    const savedTitle = localStorage.getItem('geotag_title');
+    const savedDesc = localStorage.getItem('geotag_description');
+    const savedLoc = localStorage.getItem('geotag_location');
+    
+    if (savedTitle) setTitle(savedTitle);
+    if (savedDesc) setDescription(savedDesc);
+    if (savedLoc) {
+      try {
+        setLocation(JSON.parse(savedLoc));
+      } catch (e) {}
+    }
+
+    // Initialize Auth
+    const unsubscribe = initAuth(
+      () => setNeedsAuth(false),
+      () => setNeedsAuth(true)
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // Auto-save logic
+  useEffect(() => {
+    localStorage.setItem('geotag_title', title);
+  }, [title]);
+
+  useEffect(() => {
+    localStorage.setItem('geotag_description', description);
+  }, [description]);
+
+  useEffect(() => {
+    if (location) {
+      localStorage.setItem('geotag_location', JSON.stringify(location));
+    } else {
+      localStorage.removeItem('geotag_location');
+    }
+  }, [location]);
+
+
+  const handleLogin = async () => {
+    setIsLoggingIn(true);
+    try {
+      await googleSignIn();
+      setNeedsAuth(false);
+      setError(null);
+    } catch (err) {
+      setError('Failed to sign in. You must sign in to save to Google Drive.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const clearAutoSave = () => {
+    localStorage.removeItem('geotag_title');
+    localStorage.removeItem('geotag_description');
+    localStorage.removeItem('geotag_location');
+  };
 
   const handleMediaCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -89,21 +154,20 @@ export default function MobileInput() {
       return;
     }
 
+    if (needsAuth) {
+      setError('You must sign in with Google to save photos to Drive.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       let finalMediaUrl = media.base64Fallback || media.url;
       
-      // Try to upload to Firebase Storage if we have a file
+      // Upload to Google Drive if we have a file
       if (media.file) {
-        try {
-          finalMediaUrl = await uploadMedia(media.file, media.type, media.file instanceof File ? media.file.name : 'upload');
-        } catch (storageError) {
-          console.warn("Storage failed, using fallback URL.");
-          if (media.type === 'video') {
-            throw new Error("Video uploads require Firebase Storage configuration, which failed.");
-          }
-        }
+        const mimeType = media.type === 'video' ? 'video/mp4' : 'image/jpeg';
+        finalMediaUrl = await uploadToDrive(media.file, media.file instanceof File ? media.file.name : `upload_${Date.now()}`, mimeType);
       }
 
       await addGeotag({
@@ -113,9 +177,11 @@ export default function MobileInput() {
         longitude: location.lng,
         mediaUrl: finalMediaUrl,
         mediaType: media.type,
-        photoBase64: media.type === 'image' ? finalMediaUrl : '', // for backward compatibility in map
+        photoBase64: media.type === 'image' ? (media.base64Fallback || '') : '', 
       });
-      // Reset form
+
+      // Clear AutoSave and reset form on success
+      clearAutoSave();
       setTitle('');
       setDescription('');
       if (media?.url) URL.revokeObjectURL(media.url);
@@ -134,7 +200,14 @@ export default function MobileInput() {
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans">
       <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
         <h1 className="text-xl font-bold tracking-tight text-slate-800">New Geotag</h1>
-        <button onClick={() => navigate('/')} className="text-indigo-600 text-sm font-bold">Cancel</button>
+        <div className="flex gap-4 items-center">
+           {needsAuth && (
+            <button onClick={handleLogin} disabled={isLoggingIn} className="text-xs font-bold text-white bg-blue-600 px-3 py-1.5 rounded flex items-center gap-1 opacity-90 hover:opacity-100">
+               {isLoggingIn ? 'Signing in...' : 'Sign in with Google'}
+            </button>
+           )}
+           <button onClick={() => navigate('/')} className="text-indigo-600 text-sm font-bold">Cancel</button>
+        </div>
       </header>
 
       <main className="flex-1 p-6">
